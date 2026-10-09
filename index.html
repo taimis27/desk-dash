@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f3ead8">
+  <link rel="icon" href="favicon.ico">
+  <title>DESK DASH — TINY CARS, BIG OFFICE</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span class="brand-icon">🏁</span></div>
+        <div>
+          <h1>DESK DASH</h1>
+          <p class="tagline">Tiny cars. Big office.</p>
+        </div>
+      </div>
+      <div class="desk-label">✦ &nbsp; THE OFFICE CIRCUIT</div>
+    </header>
+
+    <section class="game-shell" aria-label="Desk Dash racing game">
+      <canvas id="game" width="1280" height="720" aria-label="3D third-person racing game"></canvas>
+      <div class="hud" aria-live="polite">
+        <div class="hud-group">
+          <button class="hud-card pause-button" id="pause" type="button" disabled aria-label="Pause race">
+            <span class="pause-icon" aria-hidden="true"></span>
+          </button>
+          <div class="hud-card">
+            <div class="hud-label">Lap</div>
+            <div class="hud-value" id="lap">1<small> / 3</small></div>
+          </div>
+          <div class="hud-card">
+            <div class="hud-label">Place</div>
+            <div class="hud-value" id="place">1<small> / 5</small></div>
+          </div>
+          <div class="hud-card">
+            <div class="hud-label">Speed</div>
+            <div class="hud-value"><span id="speed">0</span><small> km/h</small></div>
+          </div>
+        </div>
+        <div class="hud-actions">
+          <div class="hud-card boost-card">
+            <div class="hud-label">Boost <span id="boost-status">READY</span></div>
+            <div class="boost-track"><div class="boost-fill" id="boost"></div></div>
+          </div>
+          <button class="hud-card fullscreen-button" id="fullscreen" type="button" aria-label="Enter fullscreen" title="Fullscreen">
+            <span class="fullscreen-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="countdown" id="countdown" aria-live="assertive" hidden>3</div>
+      <div class="race-notification" id="race-notification" aria-live="assertive" hidden></div>
+      <div class="orientation-notice" id="orientation-notice">
+        <span class="orientation-icon" aria-hidden="true">↻</span>
+        <strong>Turn your device</strong>
+        <span>Desk Dash is best played in landscape mode.</span>
+      </div>
+      <div class="overlay" id="overlay">
+        <div class="dialog menu-dialog">
+          <p class="eyebrow" id="eyebrow"></p>
+          <h2 id="title"><span class="menu-title"><span class="brand-mark menu-brand-mark" aria-hidden="true"><span class="brand-icon">🏁</span></span><span>DESK<br>DASH</span></span></h2>
+          <p class="dialog-copy" id="copy">Race the winding desk-top circuit and beat four tiny rivals across a giant office.</p>
+          <div class="result-stats" id="result-stats" hidden></div>
+          <div class="hall-of-fame-panel" id="hall-of-fame-panel" hidden></div>
+          <div class="key-hints" id="key-hints" hidden>
+            <span class="key-hint">WASD / ARROWS &nbsp; DRIVE</span>
+            <span class="key-hint">SHIFT &nbsp; BOOST</span>
+            <span class="key-hint">SPACE &nbsp; PAUSE</span>
+          </div>
+          <div class="dialog-actions">
+            <button class="play-button" id="play" type="button">Start your engines!</button>
+            <button class="secondary-button hall-menu-button" id="hall-of-fame" type="button">Hall of Fame</button>
+            <button class="secondary-button" id="secondary-action" type="button" hidden></button>
+          </div>
+          <div class="player-name-panel" id="player-name-panel" hidden>
+            <label for="player-name">Your name on the leaderboard</label>
+            <input id="player-name" type="text" maxlength="18" autocomplete="nickname" placeholder="Enter your name">
+            <p class="form-error" id="player-name-error" aria-live="polite"></p>
+            <div class="dialog-actions name-actions">
+              <button class="play-button" id="add-score" type="button">Add</button>
+              <button class="secondary-button" id="skip-score" type="button">Skip</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="touch-controls" aria-label="Touch driving controls">
+        <div class="touch-side touch-boost-side">
+          <button class="touch-button touch-boost" data-control="boost" aria-label="Boost" title="Boost"><span class="boost-bolt" aria-hidden="true"></span></button>
+        </div>
+        <span class="tilt-hint">Tilt phone left/right to steer</span>
+        <div class="touch-side touch-drive-side">
+          <button class="touch-button touch-gas" data-control="gas" aria-label="Accelerate" title="Forward">▲</button>
+          <button class="touch-button touch-brake" data-control="brake" aria-label="Brake and reverse" title="Backward">▼</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="below">
+      <div class="controls">
+        <div class="control"><kbd>↑</kbd><kbd>W</kbd> Accelerate</div>
+        <div class="control"><kbd>←</kbd><kbd>→</kbd> Steer</div>
+        <div class="control tilt-instruction">Tilt phone left/right to steer</div>
+        <div class="control"><kbd>SHIFT</kbd> Boost</div>
+        <div class="control"><kbd>SPACE</kbd> Pause / resume</div>
+      </div>
+      <div class="footer-note">3 LAPS &nbsp;·&nbsp; 4 RIVALS<br>DESK-TOP TRACK · OFFICE SETTING</div>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
