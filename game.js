@@ -2642,7 +2642,7 @@
           tiltNeutral = axis;
           return;
         }
-        const direction = landscape && screenAngle === 90 ? -1 : 1;
+        const direction = landscape && screenAngle === 90 ? 1 : -1;
         tiltSteer = Math.max(-1, Math.min(1, ((axis - tiltNeutral) * direction) / 24));
       }
 
