@@ -2632,18 +2632,19 @@
       document.getElementById('secondary-action').addEventListener('click', showMainMenu);
 
       function updateTiltSteering(event) {
-        const screenAngle = window.screen.orientation
+        const rawScreenAngle = window.screen.orientation
           ? window.screen.orientation.angle
           : Number(window.orientation) || 0;
-        const landscape = Math.abs(screenAngle) === 90;
-        const axis = landscape ? event.beta : event.gamma;
-        if (typeof axis !== 'number' || !Number.isFinite(axis)) return;
+        const screenAngle = ((rawScreenAngle % 360) + 360) % 360;
+        const radians = screenAngle * Math.PI / 180;
+        const beta = typeof event.beta === 'number' && Number.isFinite(event.beta) ? event.beta : 0;
+        const gamma = typeof event.gamma === 'number' && Number.isFinite(event.gamma) ? event.gamma : 0;
+        const screenTilt = gamma * Math.cos(radians) - beta * Math.sin(radians);
         if (tiltNeutral === null) {
-          tiltNeutral = axis;
+          tiltNeutral = screenTilt;
           return;
         }
-        const direction = landscape && screenAngle === 90 ? 1 : -1;
-        tiltSteer = Math.max(-1, Math.min(1, ((axis - tiltNeutral) * direction) / 24));
+        tiltSteer = Math.max(-1, Math.min(1, -(screenTilt - tiltNeutral) / 24));
       }
 
       async function enableTiltSteering() {
@@ -2691,8 +2692,16 @@
       });
 
       portraitQuery.addEventListener('change', event => {
+        tiltNeutral = null;
+        tiltSteer = 0;
         if (event.matches && (mode === 'race' || mode === 'countdown')) pauseRace();
       });
+      if (window.screen.orientation) {
+        window.screen.orientation.addEventListener('change', () => {
+          tiltNeutral = null;
+          tiltSteer = 0;
+        });
+      }
 
       document.querySelectorAll('.touch-button').forEach(button => {
         const control = button.dataset.control;
