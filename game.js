@@ -3,7 +3,7 @@
 
       const canvas = document.getElementById('game');
       const THREE = window.THREE;
-      const portraitQuery = window.matchMedia('(max-width: 800px) and (orientation: portrait)');
+      const portraitQuery = window.matchMedia('(orientation: portrait)');
       const overlay = document.getElementById('overlay');
       const playButton = document.getElementById('play');
       const fullscreenButton = document.getElementById('fullscreen');
@@ -110,12 +110,17 @@
         }
       }
 
-      const trackLength = track.reduce((total, point, i) => {
+      const trackDistances = [0];
+      for (let i = 0; i < track.length; i++) {
+        const point = track[i];
         const next = track[(i + 1) % track.length];
-        return total + Math.hypot(next.x - point.x, next.y - point.y);
-      }, 0);
+        trackDistances.push(trackDistances[i] + Math.hypot(next.x - point.x, next.y - point.y));
+      }
+      const trackLength = trackDistances[track.length];
       const START_TRACK_INDEX = 207;
       const START_PROGRESS = START_TRACK_INDEX / track.length;
+      const START_TRACK_DISTANCE = trackDistances[START_TRACK_INDEX];
+      const MAX_REVERSE_TRACK_DISTANCE = 110;
 
       function trackMiter(index) {
         const current = track[index];
@@ -147,6 +152,86 @@
         };
       }
 
+      const roadLeftBoundary = track.map((_, index) => trackOffsetPoint(index, ROAD_HALF));
+      const roadRightBoundary = track.map((_, index) => trackOffsetPoint(index, -ROAD_HALF));
+
+      function pointInTriangle(x, y, a, b, c) {
+        const cross = (p1, p2) => (x - p2.x) * (p1.z - p2.z) - (p1.x - p2.x) * (y - p2.z);
+        const first = cross(a, b);
+        const second = cross(b, c);
+        const third = cross(c, a);
+        const hasNegative = first < 0 || second < 0 || third < 0;
+        const hasPositive = first > 0 || second > 0 || third > 0;
+        return !(hasNegative && hasPositive);
+      }
+
+      function closestPointOnSegment(x, y, start, end) {
+        const dx = end.x - start.x;
+        const dy = end.z - start.z;
+        const lengthSquared = dx * dx + dy * dy;
+        const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1,
+          ((x - start.x) * dx + (y - start.z) * dy) / lengthSquared
+        ));
+        return { x: start.x + dx * t, y: start.z + dy * t, t };
+      }
+
+      function pointOnRoadSegment(x, y, index) {
+        const next = (index + 1) % track.length;
+        const leftStart = roadLeftBoundary[index];
+        const leftEnd = roadLeftBoundary[next];
+        const rightStart = roadRightBoundary[index];
+        const rightEnd = roadRightBoundary[next];
+        return pointInTriangle(x, y, leftStart, leftEnd, rightStart) ||
+          pointInTriangle(x, y, leftEnd, rightEnd, rightStart);
+      }
+
+      function nearestRoadBoundary(x, y, preferredIndex) {
+        for (let offset = -80; offset <= 80; offset++) {
+          const index = (preferredIndex + offset + track.length) % track.length;
+          if (pointOnRoadSegment(x, y, index)) return null;
+        }
+
+        let bestDistanceSquared = Infinity;
+        let bestBoundaryX = 0;
+        let bestBoundaryY = 0;
+        let bestInwardX = 0;
+        let bestInwardY = 0;
+        for (let index = 0; index < track.length; index++) {
+          const next = (index + 1) % track.length;
+          const leftStart = roadLeftBoundary[index];
+          const leftEnd = roadLeftBoundary[next];
+          const rightStart = roadRightBoundary[index];
+          const rightEnd = roadRightBoundary[next];
+          if (pointOnRoadSegment(x, y, index)) return null;
+          const centerStart = track[index];
+          const centerEnd = track[next];
+          for (let side = 0; side < 2; side++) {
+            const start = side === 0 ? leftStart : rightStart;
+            const end = side === 0 ? leftEnd : rightEnd;
+            const closest = closestPointOnSegment(x, y, start, end);
+            const dx = x - closest.x;
+            const dy = y - closest.y;
+            const distanceSquared = dx * dx + dy * dy;
+            if (distanceSquared < bestDistanceSquared) {
+              bestDistanceSquared = distanceSquared;
+              bestBoundaryX = closest.x;
+              bestBoundaryY = closest.y;
+              const centerX = centerStart.x + (centerEnd.x - centerStart.x) * closest.t;
+              const centerY = centerStart.y + (centerEnd.y - centerStart.y) * closest.t;
+              const inwardLength = Math.hypot(centerX - closest.x, centerY - closest.y) || 1;
+              bestInwardX = (centerX - closest.x) / inwardLength;
+              bestInwardY = (centerY - closest.y) / inwardLength;
+            }
+          }
+        }
+        return {
+          x: bestBoundaryX,
+          y: bestBoundaryY,
+          inwardX: bestInwardX,
+          inwardY: bestInwardY
+        };
+      }
+
       function pointAt(progress) {
         const scaled = ((progress % 1) + 1) % 1 * track.length;
         const index = Math.floor(scaled);
@@ -162,31 +247,68 @@
         return { x, y, angle: Math.atan2(ty, tx) };
       }
 
-      function nearestTrack(x, y) {
+      function nearestTrack(x, y, preferredIndex = null) {
         let bestDistance = Infinity;
         let bestIndex = 0;
+        let bestT = 0;
         let bestX = track[0].x;
         let bestY = track[0].y;
-        for (let i = 0; i < track.length; i++) {
-          const dx = x - track[i].x;
-          const dy = y - track[i].y;
+        const searchRadius = preferredIndex === null ? track.length : 80;
+        const firstOffset = preferredIndex === null ? 0 : -searchRadius;
+        const lastOffset = preferredIndex === null ? track.length - 1 : searchRadius;
+        const considerSegment = index => {
+          const i = (index + track.length) % track.length;
+          const point = track[i];
+          const next = track[(i + 1) % track.length];
+          const segmentX = next.x - point.x;
+          const segmentY = next.y - point.y;
+          const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+          const t = Math.max(0, Math.min(1,
+            ((x - point.x) * segmentX + (y - point.y) * segmentY) / segmentLengthSquared
+          ));
+          const closestX = point.x + segmentX * t;
+          const closestY = point.y + segmentY * t;
+          const dx = x - closestX;
+          const dy = y - closestY;
           const distance = dx * dx + dy * dy;
           if (distance < bestDistance) {
             bestDistance = distance;
             bestIndex = i;
-            bestX = track[i].x;
-            bestY = track[i].y;
+            bestT = t;
+            bestX = closestX;
+            bestY = closestY;
           }
+        };
+        for (let offset = firstOffset; offset <= lastOffset; offset++) {
+          considerSegment(preferredIndex === null ? offset : preferredIndex + offset);
         }
-        return { distance: Math.sqrt(bestDistance), progress: bestIndex / track.length, x: bestX, y: bestY };
+        if (preferredIndex !== null && bestDistance > 400 * 400) {
+          for (let i = 0; i < track.length; i++) considerSegment(i);
+        }
+        const segmentLength = trackDistances[bestIndex + 1] - trackDistances[bestIndex];
+        const distanceAlong = trackDistances[bestIndex] + segmentLength * bestT;
+        return {
+          distance: Math.sqrt(bestDistance),
+          progress: distanceAlong / trackLength,
+          distanceAlong,
+          index: bestIndex,
+          x: bestX,
+          y: bestY
+        };
       }
 
       function createRacer(name, color, accent, player, startProgress, lane, speed, skill) {
         const p = pointAt(startProgress);
         const side = p.angle + Math.PI / 2;
+        const x = p.x + Math.cos(side) * lane;
+        const y = p.y + Math.sin(side) * lane;
+        const initialTrack = nearestTrack(x, y);
         return {
-          name, color, accent, player, x: p.x + Math.cos(side) * lane, y: p.y + Math.sin(side) * lane,
+          name, color, accent, player, x, y,
           angle: p.angle, vx: 0, vy: 0, progress: startProgress, lastProgress: startProgress,
+          lastTrackX: x, lastTrackY: y, trackDistance: initialTrack.distanceAlong,
+          trackIndex: initialTrack.index,
+          raceTrackDistance: 0, furthestTrackDistance: 0, lapDistance: 0,
           laps: 0, boost: player ? 1 : 0, boostMax: 1, boostPower: 0,
           boostRechargeDelay: 0, boostSpent: 0, boosting: false,
           aiSpeed: player ? 0 : 232 * (.97 + Math.random() * .06),
@@ -1599,8 +1721,8 @@
         car.flames = [];
         for (const side of [-1, 1]) {
           for (const [radius, length, offset, material] of [
-            [5.5, 34, -38, flameOuter],
-            [2.8, 25, -42, flameCore]
+            [5.5, 34, -44, flameOuter],
+            [2.8, 25, -39.5, flameCore]
           ]) {
             const flame = new THREE.Mesh(new THREE.ConeGeometry(radius, length, 9), material);
             flame.rotation.x = -Math.PI / 2;
@@ -1903,27 +2025,24 @@
         player.y += player.vy * dt;
         player.x = Math.max(-WORLD_LIMIT_X, Math.min(WORLD_LIMIT_X, player.x));
         player.y = Math.max(-WORLD_LIMIT_Z, Math.min(WORLD_LIMIT_Z, player.y));
-        const nearest = nearestTrack(player.x, player.y);
-        const collisionLimit = ROAD_HALF - 7;
-        player.offRoad = Math.max(0, nearest.distance - collisionLimit);
+        const nearest = nearestTrack(player.x, player.y, player.trackIndex);
+        const roadBoundary = nearestRoadBoundary(player.x, player.y, nearest.index);
+        player.offRoad = roadBoundary ? Math.hypot(player.x - roadBoundary.x, player.y - roadBoundary.y) : 0;
         player.collisionCooldown = Math.max(0, player.collisionCooldown - dt);
-        if (nearest.distance > collisionLimit) {
-          const nx = (player.x - nearest.x) / Math.max(nearest.distance, 1);
-          const ny = (player.y - nearest.y) / Math.max(nearest.distance, 1);
-          const penetration = nearest.distance - collisionLimit;
-          player.x -= nx * Math.min(penetration, 5);
-          player.y -= ny * Math.min(penetration, 5);
+        if (roadBoundary) {
+          player.x = roadBoundary.x + roadBoundary.inwardX;
+          player.y = roadBoundary.y + roadBoundary.inwardY;
 
-          const outwardSpeed = player.vx * nx + player.vy * ny;
+          const outwardSpeed = -(player.vx * roadBoundary.inwardX + player.vy * roadBoundary.inwardY);
           if (outwardSpeed > 0) {
-            player.vx -= nx * outwardSpeed * 1.55;
-            player.vy -= ny * outwardSpeed * 1.55;
+            player.vx += roadBoundary.inwardX * outwardSpeed * 1.55;
+            player.vy += roadBoundary.inwardY * outwardSpeed * 1.55;
           }
           player.vx *= .97;
           player.vy *= .97;
 
           if (player.collisionCooldown <= 0) {
-            emitSparks(player.x, player.y, nx, ny);
+            emitSparks(player.x, player.y, -roadBoundary.inwardX, -roadBoundary.inwardY);
             player.wallHits++;
             player.collisionCooldown = .48;
             cameraShake = Math.max(cameraShake, 5);
@@ -1935,8 +2054,6 @@
           emitSmoke(player);
           player.smokeTimer = .095;
         }
-        updateRaceProgress(player, dt);
-
         for (const rival of racers) {
           if (rival === player || rival.finished) continue;
           const distance = Math.hypot(player.x - rival.x, player.y - rival.y);
@@ -1953,12 +2070,50 @@
             cameraShake = Math.max(cameraShake, 2.3);
           }
         }
+        updateRaceProgress(player, dt);
       }
 
       function updateRaceProgress(car, dt) {
-        const nearest = nearestTrack(car.x, car.y);
+        let nearest = nearestTrack(car.x, car.y, car.trackIndex);
         const previousProgress = car.progress;
-        if (previousProgress < START_PROGRESS && nearest.progress >= START_PROGRESS) {
+        const oldTrackDistance = car.trackDistance;
+        let distanceDelta = nearest.distanceAlong - oldTrackDistance;
+        if (distanceDelta > trackLength / 2) distanceDelta -= trackLength;
+        else if (distanceDelta < -trackLength / 2) distanceDelta += trackLength;
+        let nextRaceTrackDistance = car.raceTrackDistance + distanceDelta;
+
+        if (car.player && nextRaceTrackDistance < car.furthestTrackDistance - MAX_REVERSE_TRACK_DISTANCE) {
+          const allowedDelta = car.furthestTrackDistance - MAX_REVERSE_TRACK_DISTANCE - car.raceTrackDistance;
+          const movementFraction = distanceDelta === 0 ? 0 : Math.max(0, Math.min(1, allowedDelta / distanceDelta));
+          car.x = car.lastTrackX + (car.x - car.lastTrackX) * movementFraction;
+          car.y = car.lastTrackY + (car.y - car.lastTrackY) * movementFraction;
+          const forwardSpeed = car.vx * Math.cos(car.angle) + car.vy * Math.sin(car.angle);
+          if (forwardSpeed < 0) {
+            car.vx -= Math.cos(car.angle) * forwardSpeed;
+            car.vy -= Math.sin(car.angle) * forwardSpeed;
+          }
+          nearest = nearestTrack(car.x, car.y, car.trackIndex);
+          distanceDelta = nearest.distanceAlong - oldTrackDistance;
+          if (distanceDelta > trackLength / 2) distanceDelta -= trackLength;
+          else if (distanceDelta < -trackLength / 2) distanceDelta += trackLength;
+          nextRaceTrackDistance = car.raceTrackDistance + distanceDelta;
+        }
+
+        car.lastTrackX = car.x;
+        car.lastTrackY = car.y;
+        car.trackDistance = nearest.distanceAlong;
+        car.trackIndex = nearest.index;
+        car.progress = nearest.progress;
+        car.raceTrackDistance = nextRaceTrackDistance;
+        car.furthestTrackDistance = Math.max(car.furthestTrackDistance, car.raceTrackDistance);
+        car.lapDistance += distanceDelta;
+
+        const previousLapPosition = ((oldTrackDistance - START_TRACK_DISTANCE) % trackLength + trackLength) % trackLength;
+        const currentLapPosition = ((nearest.distanceAlong - START_TRACK_DISTANCE) % trackLength + trackLength) % trackLength;
+        const crossedFinishForward = distanceDelta > 0 &&
+          previousLapPosition > trackLength * .85 && currentLapPosition < trackLength * .15;
+        if (crossedFinishForward && car.lapDistance >= trackLength && car.laps < TOTAL_LAPS) {
+          car.lapDistance -= trackLength;
           car.laps++;
           if (car.player) {
             const lapTime = raceTime - car.lapStart;
@@ -1968,7 +2123,6 @@
           }
         }
         car.lastProgress = previousProgress;
-        car.progress = nearest.progress;
         if (car.laps >= TOTAL_LAPS && !car.finished) {
           car.finished = true;
           car.finishTime = raceTime;
@@ -2013,10 +2167,22 @@
         car.angle = target.angle + Math.sin(raceTime * 1.2 + car.skill * 8) * (1 - car.aiAccuracy) * .24;
         car.vx = Math.cos(car.angle) * speed;
         car.vy = Math.sin(car.angle) * speed;
+        const previousTrackDistance = car.trackDistance;
+        const nearest = nearestTrack(car.x, car.y, car.trackIndex);
+        let distanceDelta = nearest.distanceAlong - previousTrackDistance;
+        if (distanceDelta > trackLength / 2) distanceDelta -= trackLength;
+        else if (distanceDelta < -trackLength / 2) distanceDelta += trackLength;
+        car.raceTrackDistance += distanceDelta;
+        car.trackDistance = nearest.distanceAlong;
+        car.trackIndex = nearest.index;
         if (!endless && car.laps >= TOTAL_LAPS && !car.finished) {
           car.finished = true;
           car.finishTime = raceTime;
         }
+      }
+
+      function trackDistanceGap(from, to) {
+        return to.raceTrackDistance - from.raceTrackDistance;
       }
 
       function currentPlace() {
@@ -2024,8 +2190,7 @@
           if (a.finished && b.finished) return a.finishTime - b.finishTime;
           if (a.finished) return -1;
           if (b.finished) return 1;
-          return (b.laps + wrapProgress(b.progress - START_PROGRESS)) -
-            (a.laps + wrapProgress(a.progress - START_PROGRESS));
+          return trackDistanceGap(a, b);
         });
         return ranking.indexOf(player) + 1;
       }
@@ -2372,7 +2537,9 @@
           }
           const previousProgress = car.progress;
           car.aiSpeed = 232;
-          car.progress = wrapProgress(car.progress + car.aiSpeed * dt / trackLength);
+          const step = car.aiSpeed * dt / trackLength;
+          car.raceTrackDistance += step * trackLength;
+          car.progress = wrapProgress(car.progress + step);
           if (previousProgress < START_PROGRESS && car.progress >= START_PROGRESS) {
             car.laps = (car.laps + 1) % TOTAL_LAPS;
           }

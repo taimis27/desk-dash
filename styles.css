@@ -556,7 +556,7 @@
       .footer-note { display: none; }
     }
 
-    @media (max-width: 800px) and (orientation: landscape) {
+    @media (max-width: 1200px) and (orientation: landscape) {
       body { min-height: 0; overflow: hidden; }
       .page { width: 100%; margin: 0; padding: 0; }
       .page > header, .page > .below { display: none; }
@@ -571,9 +571,9 @@
       .game-shell .touch-controls {
         position: absolute;
         z-index: 4;
-        right: max(10px, env(safe-area-inset-right));
-        bottom: max(10px, env(safe-area-inset-bottom));
-        left: max(10px, env(safe-area-inset-left));
+        right: max(18px, env(safe-area-inset-right));
+        bottom: max(18px, env(safe-area-inset-bottom));
+        left: max(18px, env(safe-area-inset-left));
         display: flex;
         justify-content: space-between;
         align-items: stretch;
@@ -599,8 +599,8 @@
       .touch-boost-side { align-items: flex-end; }
       .touch-button {
         display: grid;
-          width: var(--touch-button-size, clamp(60px, 9vw, 78px));
-          height: var(--touch-button-size, clamp(60px, 9vw, 78px));
+        width: var(--touch-button-size, clamp(60px, 9vw, 78px));
+        height: calc(var(--touch-button-size, clamp(60px, 9vw, 78px)) + 6px);
         place-items: center;
         border: var(--outline);
         border-radius: 13px;
@@ -614,7 +614,7 @@
         user-select: none;
         -webkit-user-select: none;
       }
-      .touch-boost { width: var(--touch-button-size, clamp(60px, 9vw, 78px)); height: calc(var(--touch-button-size, clamp(60px, 9vw, 78px)) * 2 + 8px); }
+      .touch-boost { width: var(--touch-button-size, clamp(60px, 9vw, 78px)); height: calc(var(--touch-button-size, clamp(60px, 9vw, 78px)) * 2 + 14px); }
       .boost-bolt {
         width: 25px;
         height: 36px;
@@ -625,10 +625,10 @@
       .game-shell:fullscreen .touch-controls { display: flex; }
     }
 
-    @media (max-width: 800px) and (orientation: landscape) and (max-height: 380px) {
-      .game-shell .touch-controls { right: 7px; bottom: 7px; left: 7px; }
+    @media (max-width: 1200px) and (orientation: landscape) and (max-height: 380px) {
+      .game-shell .touch-controls { right: 15px; bottom: 15px; left: 15px; }
       .touch-button { --touch-button-size: clamp(58px, 8vh, 68px); }
-      .touch-boost { width: var(--touch-button-size); height: calc(var(--touch-button-size) * 2 + 8px); }
+      .touch-boost { width: var(--touch-button-size); height: calc(var(--touch-button-size) * 2 + 14px); }
       .touch-drive-side { gap: 8px; }
     }
 
@@ -662,7 +662,7 @@
       .fullscreen-icon { width: 13px; height: 13px; }
     }
 
-    @media (max-width: 800px) and (orientation: portrait) {
+    @media (orientation: portrait) {
       body { min-height: 100vh; }
       .page { padding: 12px; }
       header, .below { display: none; }
